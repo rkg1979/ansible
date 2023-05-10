@@ -1,0 +1,138 @@
+---
+- name: Check if yellowfin installation already exists on server
+  stat:
+    path: "{{ yellowfin_install_path }}"
+  register: yellowfin_exist
+
+- name: Check if  yellowfin path already exists
+  debug:
+    msg: "yellowfin installation {{ yellowfin_install_path }} already exists on this server. To continue, delete the installation folder and rerun"
+  when: yellowfin_exist.stat.exists
+
+### Run rest of the playboook only when installation does not already exist on server
+
+- when: not yellowfin_exist.stat.exists
+  block:
+    - name: download yellowfin license file from artifactory
+      get_url:
+        url: " {{ yellowfin_license_url }}"
+        dest: /tmp/
+      register: licout
+      retries: 3
+      until: licout is succeeded
+      delay: 5
+
+    - name: download mysql-connector, odbc jar and license files from CDaaS artifactory
+      get_url:
+        url: "{{ ct_packages }}/yellowfin/{{ yellowfin_version }}/{{ item }}"
+        dest: /tmp/
+      register: downloads_out
+      retries: 3
+      until: downloads_out is succeeded
+      delay: 5
+      with_items:
+        - "{{ yellowfin_ojdbc_jar }}"
+        - "{{ yellowfin_jar }}"
+        - "{{ yellowfin_mysql_connector_jar }}"
+
+    - name: Call fetch_secrets_from_vault role to fetch secret tls_key from vault
+      include_role:
+        name: fetch_secrets_from_vault
+      vars:
+        secret: "tls_key"
+        vault_compartment: "{{ common_vault_compartment_name }}"
+
+    - name: copy install.properties.j2 file to tmp folder, replacing variables
+      template:
+        src: install.properties.j2
+        dest: /tmp/install.properties
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: update /tmp directory permissions
+      ansible.builtin.file:
+        path: '/tmp/'
+        mode: '0777'
+        recurse: yes
+
+    - name: install yellowfin
+      ansible.builtin.shell: |
+        set -x
+        cd /tmp
+        java -jar {{ yellowfin_jar }} -silent install.properties
+      register: install_out
+
+    - name: copy ojdbc file to /opt/yellowfin/appserver/lib folder
+      ansible.builtin.shell: cp /tmp/{{ yellowfin_ojdbc_jar }} {{ yellowfin_install_path }}/appserver/lib/
+
+    - name: copy cert files to /opt/yellowfin/appserver/conf folder
+      ansible.builtin.shell: cp /tmp/localhost-rsa-chain.pem /tmp/localhost-rsa-key.pem /tmp/localhost-rsa-cert.pem {{ yellowfin_install_path }}/appserver/conf/
+
+    - name: backup server.xml
+      ansible.builtin.shell: mv {{ yellowfin_install_path }}/appserver/conf/server.xml {{ yellowfin_install_path }}/appserver/conf/server.xml.bk
+
+    - name: update server.xml file
+      copy: src=server.xml dest={{ yellowfin_install_path }}/appserver/conf/server.xml mode=0644 force=yes
+
+    - name: in conf/web.xml, add the security lines just above the last </web-app> entry
+      blockinfile:
+        path: "{{ yellowfin_install_path }}/appserver/conf/web.xml"
+        marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+        insertbefore: '</web-app>'
+        state: present
+        block: |
+          <security-constraint>
+           <web-resource-collection>
+           <web-resource-name>Entire Application</web-resource-name>
+           <url-pattern>/*</url-pattern>
+           </web-resource-collection>
+           <user-data-constraint>
+           <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+           </user-data-constraint>
+          </security-constraint>
+
+    ##Below tasks will update the web.xml file, due to issue with yellowfin silent installation, which overwrites the original database
+    ## Ticket: https://community.yellowfinbi.com/topic/27151-yellowfin-silent-installation-mysql-db-getting-overwritten
+    - name: backup web.xml
+      ansible.builtin.shell: cp {{ yellowfin_install_path }}/appserver/webapps/ROOT/WEB-INF/web.xml {{ yellowfin_install_path }}/appserver/webapps/ROOT/WEB-INF/web.xml.bk
+
+    - name: Replace password
+      ansible.builtin.replace:
+        path: "{{ yellowfin_install_path }}/appserver/webapps/ROOT/WEB-INF/web.xml"
+        after: '<param-name>JDBCPassword</param-name>'
+        before: '</init-param>'
+        regexp: '<param-value>.*</param-value>'
+        replace: '<param-value>{{databasedbapassword}}</param-value>'
+
+    - name: Replace mysql hostname
+      ansible.builtin.replace:
+        path: "{{ yellowfin_install_path }}/appserver/webapps/ROOT/WEB-INF/web.xml"
+        after: '<param-name>JDBCUrl'
+        before: '</init-param>'
+        regexp: '<param-value>.*</param-value>'
+        replace: '<param-value>jdbc:mysql://{{ databasehostname }}/yellowfin?characterEncoding=utf8</param-value>'
+
+    - name: Replace JDBCPasswordEncrypted to false
+      ansible.builtin.replace:
+        path: "{{ yellowfin_install_path }}/appserver/webapps/ROOT/WEB-INF/web.xml"
+        after: '<param-name>JDBCPasswordEncrypted</param-name>'
+        before: '</init-param>'
+        regexp: '<param-value>.*</param-value>'
+        replace: '<param-value>false</param-value>'
+
+    ##### Copy /etc/init.d/yellowfin and use the same for start and stopping yellowfin servers
+    - name: copy /etc/init.d/yellowfin
+      template:
+        src: yellowfin.j2
+        dest: /etc/init.d/yellowfin
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: status yellowfin services
+      ansible.builtin.shell: "sh /etc/init.d/yellowfin status"
+
+    - name: restart yellowfin services
+      ansible.builtin.shell: "nohup /etc/init.d/yellowfin restart"
+

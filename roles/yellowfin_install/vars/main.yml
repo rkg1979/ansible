@@ -1,0 +1,13 @@
+---
+# vars file for yellowfin_install
+#yellowfin variables
+yellowfin_install_path: /opt/yellowfin
+yellowfin_version:  yellowfin8.0
+yellowfin_license: yellowfin-lic.lic
+yellowfin_mysql_connector_jar: mysql-connector-java.jar
+yellowfin_ojdbc_jar: ojdbc8-21.4.0.0_1.jar
+yellowfin_jar: yellowfin-8.0.11-20220223-full.jar
+yellowfin_dummydb_host: yellowfindummy.mydomain.com
+yellowfin_dummydb_pwd: Mypwd@1
+yellowfin_dummydb_user: yellowfin
+yellowfin_db_host_qa: yellowfinqa.mydomain.com
