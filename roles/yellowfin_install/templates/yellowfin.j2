@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+#       /etc/rc.d/init.d/yellowfin
+#
+#       The yellowfin bi server
+#
+#       This shell script takes care of starting and stopping yellowfin
+#
+# chkconfig: - 83 23
+
+start() {
+        echo -n "Starting yellowfin: "
+        sh {{ yellowfin_install_path }}/appserver/bin/startup.sh
+        return 0
+}
+
+stop() {
+        echo -n "Shutting down yellowfin: "
+        sh {{ yellowfin_install_path }}/appserver/bin/shutdown.sh
+        return
+}
+restart() {
+    tries=2
+    # Loop through the number of tries
+    for i in $(seq 1 $tries); do
+        # Check if yellowfin process is running
+        if ps aux | grep yellowfin|grep java | grep -v grep > /dev/null; then
+            echo "yellowfin process is running. Killing the process..."
+            # Kill Tomcat process
+            kill $(ps aux | grep yellowfin|grep java | grep -v grep | awk '{print $2}')
+        else
+            echo "yellowfin process is not running."
+        fi
+
+        # Start yellowfin process
+        echo "Starting yellowfin process..."
+        sh {{ yellowfin_install_path }}/appserver/bin/startup.sh
+
+        # Sleep for 10 seconds before checking if the process is running
+        sleep 10
+
+        # Check if yellowfin process is running
+        if ps aux | grep yellowfin|grep java| grep -v grep > /dev/null; then
+            echo "yellowfin process is running."
+            exit 0
+        else
+            echo "yellowfin process is not running."
+        fi
+    done
+
+    echo "Failed to start yellowfin process after $tries tries."
+    exit 1
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        PID=$(ps -U root -f|grep yellowfin|grep java| awk '{print $2}');
+        if [[ $PID ]]; then
+          echo "yellowfin (pid $PID) is running..."
+        else
+          echo "yellowfin is not running"
+        fi
+        ;;
+    restart)
+        restart
+        ;;
+    *)
+        echo "Usage: <servicename> {start|stop|status|reload|restart[|probe]"
+        exit 1
+        ;;
+esac
+exit $?
