@@ -1,22 +1,23 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Yellowfin 8.0 installation script. 
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+- Install prerequisite java, tomcat (This ansible script is not covering this, and assuming that they are already present on the VM)
+- Download mysql connector jar and odbc jar and your yellowfin license file
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+Mainly the artifactory URL, from where to download the required jars, and yellowfin URl to download the yellowfin jar. 
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+There can be dependencies, but I have not included them in this script. e.g. I had to use a vault to keep license file. 
 
 Example Playbook
 ----------------
