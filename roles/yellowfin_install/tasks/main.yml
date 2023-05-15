@@ -114,7 +114,7 @@
         regexp: '<param-value>.*</param-value>'
         replace: '<param-value>false</param-value>'
 
-    ##### Copy /etc/init.d/yellowfin and use the same for start and stopping yellowfin servers
+    #### Copy /etc/init.d/yellowfin and use the same for start and stopping yellowfin servers
     - name: copy /etc/init.d/yellowfin
       template:
         src: yellowfin.j2
