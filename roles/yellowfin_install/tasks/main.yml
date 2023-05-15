@@ -22,9 +22,9 @@
       until: licout is succeeded
       delay: 5
 
-    - name: download mysql-connector, odbc jar and license files from CDaaS artifactory
+    - name: download mysql-connector, odbc jar and license files from artifactory
       get_url:
-        url: "{{ ct_packages }}/yellowfin/{{ yellowfin_version }}/{{ item }}"
+        url: "{{ artifactory_url }}/yellowfin/{{ yellowfin_version }}/{{ item }}"
         dest: /tmp/
       register: downloads_out
       retries: 3
@@ -34,13 +34,6 @@
         - "{{ yellowfin_ojdbc_jar }}"
         - "{{ yellowfin_jar }}"
         - "{{ yellowfin_mysql_connector_jar }}"
-
-    - name: Call fetch_secrets_from_vault role to fetch secret tls_key from vault
-      include_role:
-        name: fetch_secrets_from_vault
-      vars:
-        secret: "tls_key"
-        vault_compartment: "{{ common_vault_compartment_name }}"
 
     - name: copy install.properties.j2 file to tmp folder, replacing variables
       template:
